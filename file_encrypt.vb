@@ -1,21 +1,64 @@
 Option Explicit
 
-Function AES_Encrypt(keypass, sfile, tfile)
-    AES_Encrypt = AES(keypass, True, sfile, tfile)
+Sub try_aes()
+    Dim txt As String, result As String
+    Dim ecm_block As Variant
+    Dim key As String
+    Dim n As Variant, ss As String
+    key = "AES256ECM"
+    ecm_block = Array(&H99, &HF6, &HC4, &HB, &H16, &HE7, &HFB, &HA8, &H58, &HA5, &HCE, &H37, &HDA, &H22, &H19, &HC)
+    ss = ""
+    For Each n In ecm_block
+        ss = ss + Chr(n)
+    Next n
+    result = aes_ecm(False, ss, key)
+    Debug.Print result
+    txt = aes_ecm(True, result, key)
+    Debug.Print txt
+End Sub
+
+Function AES_Encrypt(key, sfile, tfile)
+    Dim oFS As Object
+    Dim oFile1, oFile2, block, ts, ps, result
+    Set oFS = CreateObject("Scripting.FileSystemObject")
+    Set oFile1 = oFS.GetFile(sfile)
+    Set ts = oFile1.OpenAsTextStream()
+    Set ps = oFS.CreateTextFile(tfile)
+    While Not ts.AtEndOfStream
+        block = ts.Read(80)
+        result = aes_ecm(True, block, key)
+        ps.Write result
+        DoEvents
+    Wend
+    ts.Close
+    ps.Close
 End Function
 
-Function AES_Decrypt(keypass, sfile, tfile)
-    AES_Decrypt = AES(keypass, False, sfile, tfile)
+Function AES_Decrypt(key, sfile, tfile)
+    Dim oFS As Object
+    Dim oFile1, oFile2, block, ts, ps, result
+    Set oFS = CreateObject("Scripting.FileSystemObject")
+    Set oFile1 = oFS.GetFile(sfile)
+    Set ts = oFile1.OpenAsTextStream()
+    Set ps = oFS.CreateTextFile(tfile)
+    While Not ts.AtEndOfStream
+        block = ts.Read(80)
+        result = aes_ecm(False, block, key)
+        ps.Write result
+        DoEvents
+    Wend
+    ts.Close
+    ps.Close
 End Function
 
-Function AES(keypass, encode_mode, sfile, tfile)
+
+Function aes_ecm(encode_mode, text, oPW)
     Dim sbox As Variant, sboxinv As Variant, rcon As Variant
     Dim g2, g3, g9, g11, g13, g14
     Dim expandedKey, block(16), aesKey(32), i, isDone, j, isEncode
     Dim sPlain, sPass, sCipher, sTemp
-    Dim oFile1, oFS, oFile2
-    Dim x, r, y, z, blk, temp(4), intTemp
-    Dim flen As Long
+    Dim x, r, y, Temp(4), intTemp, result As String
+ 
  
     g2 = Array( _
         &H0, &H2, &H4, &H6, &H8, &HA, &HC, &HE, &H10, &H12, &H14, &H16, &H18, &H1A, &H1C, &H1E, _
@@ -179,253 +222,194 @@ Function AES(keypass, encode_mode, sfile, tfile)
         &HC6, &H97, &H35, &H6A, &HD4, &HB3, &H7D, &HFA, &HEF, &HC5, &H91, &H39, &H72, &HE4, &HD3, &HBD, _
         &H61, &HC2, &H9F, &H25, &H4A, &H94, &H33, &H66, &HCC, &H83, &H1D, &H3A, &H74, &HE8, &HCB)
  
- 
-    Set oFS = CreateObject("Scripting.FileSystemObject")
-    Set oFile1 = oFS.OpenTextFile(sfile, 1)
- 
     If encode_mode Then
-        oFS.CreateTextFile tfile, 2, True
         isEncode = True
-        flen = 0
     Else
-        oFS.CreateTextFile tfile, 2, True
         isEncode = False
     End If
- 
-    Set oFile2 = oFS.OpenTextFile(tfile, 2)
-    Set oFS = Nothing
- 
-    For i = 0 To (Len(keypass) - 1)
-        aesKey(i) = Asc(Mid(keypass, i + 1, 1))
+    
+    sPlain = "" & text
+    result = ""
+    
+    For i = 0 To (Len(oPW) - 1)
+        aesKey(i) = Asc(Mid(oPW, i + 1, 1))
     Next
  
-    For i = Len(keypass) To 31
+    For i = Len(oPW) To 31
         aesKey(i) = 0
     Next
  
     expandedKey = expandKey(aesKey, sbox, rcon)
-    Do Until oFile1.AtEndOfStream
-        DoEvents
-        sPlain = oFile1.Read(1024)
-        If encode_mode Then
-            flen = flen + Len(sPlain)
-        Else
-            If oFile1.AtEndOfStream Then
-                x = Len(sPlain)
-                blk = Mid(sPlain, x - 4, 5)
-                sPlain = Mid(sPlain, 1, x - 5)
-                flen = 0
-                For i = 1 To 5
-                    y = Mid(blk, i, 1)
-                    z = Asc(y)
-                    y = i - 1
-                    flen = flen + (z * (256 ^ y))
-                    DoEvents
-                Next
-            End If
-        End If
-        sCipher = ""
-        j = 0
-        isDone = False
  
-        Do Until isDone
-            DoEvents
-            sTemp = Mid(sPlain, j * 16 + 1, 16)
- 
-            If Len(sTemp) < 16 Then
-                For i = Len(sTemp) To 15
-                    sTemp = sTemp & Chr(0)
-                    DoEvents
-                Next
-            End If
- 
-            For i = 0 To 15
-                block(i) = Asc(Mid(sTemp, (i Mod 4) * 4 + (i \ 4) + 1, 1))
+    sCipher = ""
+    j = 0
+    isDone = False
+
+    Do Until isDone
+        sTemp = Mid(sPlain, j * 16 + 1, 16)
+
+        If Len(sTemp) < 16 Then
+            For i = Len(sTemp) To 15
+                sTemp = sTemp & Chr(0)
             Next
- 
-            If (j + 1) * 16 >= Len(sPlain) Then
-                isDone = True
-            End If
- 
-            j = j + 1
- 
-            If isEncode Then
-                r = 0
-                For i = 0 To 15
-                    block(i) = block(i) Xor expandedKey((i Mod 4) * 4 + (i \ 4))
-                    DoEvents
-                Next
- 
-                For x = 1 To 13
-                    DoEvents
-                    block(0) = sbox(block(0))
-                    block(1) = sbox(block(1))
-                    block(2) = sbox(block(2))
-                    block(3) = sbox(block(3))
- 
-                    intTemp = sbox(block(4))
-                    block(4) = sbox(block(5))
-                    block(5) = sbox(block(6))
-                    block(6) = sbox(block(7))
-                    block(7) = intTemp
- 
-                    intTemp = sbox(block(8))
-                    block(8) = sbox(block(10))
-                    block(10) = intTemp
-                    intTemp = sbox(block(9))
-                    block(9) = sbox(block(11))
-                    block(11) = intTemp
- 
-                    intTemp = sbox(block(12))
-                    block(12) = sbox(block(15))
-                    block(15) = sbox(block(14))
-                    block(14) = sbox(block(13))
-                    block(13) = intTemp
- 
-                    r = x * 16
-                    For i = 0 To 3
-                        DoEvents
-                        temp(0) = block(i)
-                        temp(1) = block(i + 4)
-                        temp(2) = block(i + 8)
-                        temp(3) = block(i + 12)
- 
-                        block(i) = g2(temp(0)) Xor temp(3) Xor temp(2) Xor g3(temp(1)) Xor expandedKey(r + i * 4)
-                        block(i + 4) = g2(temp(1)) Xor temp(0) Xor temp(3) Xor g3(temp(2)) Xor expandedKey(r + i * 4 + 1)
-                        block(i + 8) = g2(temp(2)) Xor temp(1) Xor temp(0) Xor g3(temp(3)) Xor expandedKey(r + i * 4 + 2)
-                        block(i + 12) = g2(temp(3)) Xor temp(2) Xor temp(1) Xor g3(temp(0)) Xor expandedKey(r + i * 4 + 3)
-                    Next
-                Next
- 
-                block(0) = sbox(block(0)) Xor expandedKey(224)
-                block(1) = sbox(block(1)) Xor expandedKey(228)
-                block(2) = sbox(block(2)) Xor expandedKey(232)
-                block(3) = sbox(block(3)) Xor expandedKey(236)
- 
-                intTemp = sbox(block(4)) Xor expandedKey(237)
-                block(4) = sbox(block(5)) Xor expandedKey(225)
-                block(5) = sbox(block(6)) Xor expandedKey(229)
-                block(6) = sbox(block(7)) Xor expandedKey(233)
-                block(7) = intTemp
- 
-                intTemp = sbox(block(8)) Xor expandedKey(234)
-                block(8) = sbox(block(10)) Xor expandedKey(226)
-                block(10) = intTemp
-                intTemp = sbox(block(9)) Xor expandedKey(238)
-                block(9) = sbox(block(11)) Xor expandedKey(230)
-                block(11) = intTemp
- 
-                intTemp = sbox(block(12)) Xor expandedKey(231)
-                block(12) = sbox(block(15)) Xor expandedKey(227)
-                block(15) = sbox(block(14)) Xor expandedKey(239)
-                block(14) = sbox(block(13)) Xor expandedKey(235)
-                block(13) = intTemp
-            Else
-                block(0) = sboxinv(block(0) Xor expandedKey(224))
-                block(1) = sboxinv(block(1) Xor expandedKey(228))
-                block(2) = sboxinv(block(2) Xor expandedKey(232))
-                block(3) = sboxinv(block(3) Xor expandedKey(236))
- 
-                intTemp = sboxinv(block(4) Xor expandedKey(225))
-                block(4) = sboxinv(block(7) Xor expandedKey(237))
-                block(7) = sboxinv(block(6) Xor expandedKey(233))
-                block(6) = sboxinv(block(5) Xor expandedKey(229))
-                block(5) = intTemp
- 
-                intTemp = sboxinv(block(8) Xor expandedKey(226))
-                block(8) = sboxinv(block(10) Xor expandedKey(234))
-                block(10) = intTemp
-                intTemp = sboxinv(block(9) Xor expandedKey(230))
-                block(9) = sboxinv(block(11) Xor expandedKey(238))
-                block(11) = intTemp
- 
-                intTemp = sboxinv(block(12) Xor expandedKey(227))
-                block(12) = sboxinv(block(13) Xor expandedKey(231))
-                block(13) = sboxinv(block(14) Xor expandedKey(235))
-                block(14) = sboxinv(block(15) Xor expandedKey(239))
-                block(15) = intTemp
- 
-                For x = 13 To 1 Step -1
-                    r = x * 16
- 
-                    For i = 0 To 3
-                        DoEvents
-                        temp(0) = block(i) Xor expandedKey(r + i * 4)
-                        temp(1) = block(i + 4) Xor expandedKey(r + i * 4 + 1)
-                        temp(2) = block(i + 8) Xor expandedKey(r + i * 4 + 2)
-                        temp(3) = block(i + 12) Xor expandedKey(r + i * 4 + 3)
- 
-                        block(i) = g14(temp(0)) Xor g9(temp(3)) Xor g13(temp(2)) Xor g11(temp(1))
-                        block(i + 4) = g14(temp(1)) Xor g9(temp(0)) Xor g13(temp(3)) Xor g11(temp(2))
-                        block(i + 8) = g14(temp(2)) Xor g9(temp(1)) Xor g13(temp(0)) Xor g11(temp(3))
-                        block(i + 12) = g14(temp(3)) Xor g9(temp(2)) Xor g13(temp(1)) Xor g11(temp(0))
-                    Next
- 
-                    block(0) = sboxinv(block(0))
-                    block(1) = sboxinv(block(1))
-                    block(2) = sboxinv(block(2))
-                    block(3) = sboxinv(block(3))
- 
-                    intTemp = sboxinv(block(4))
-                    block(4) = sboxinv(block(7))
-                    block(7) = sboxinv(block(6))
-                    block(6) = sboxinv(block(5))
-                    block(5) = intTemp
- 
-                    intTemp = sboxinv(block(8))
-                    block(8) = sboxinv(block(10))
-                    block(10) = intTemp
-                    intTemp = sboxinv(block(9))
-                    block(9) = sboxinv(block(11))
-                    block(11) = intTemp
- 
-                    intTemp = sboxinv(block(12))
-                    block(12) = sboxinv(block(13))
-                    block(13) = sboxinv(block(14))
-                    block(14) = sboxinv(block(15))
-                    block(15) = intTemp
-                Next
- 
-                r = 0
-                For i = 0 To 15
-                    block(i) = block(i) Xor expandedKey((i Mod 4) * 4 + (i \ 4))
-                    DoEvents
-                Next
-                DoEvents
-            End If
- 
-            For i = 0 To 15
-                sCipher = sCipher & Chr(block((i Mod 4) * 4 + (i \ 4)))
-                DoEvents
-            Next
-        Loop
-        If oFile1.AtEndOfStream Then
-            y = Int(flen - CLng(flen / 1024) * 1024)
-            sCipher = Mid(sCipher, 1, y)
         End If
-        oFile2.Write sCipher
-        DoEvents
-    Loop
-    If encode_mode Then
-        For i = 1 To 5
-            If flen >= 256 Then
-                x = Int(flen - CLng(flen / 256) * 256)
-                flen = CLng((flen - x) / 256)
-            Else
-                x = flen
-                flen = 0
-            End If
-            oFile2.Write Chr(x)
-            DoEvents
+
+        For i = 0 To 15
+            block(i) = Asc(Mid(sTemp, (i Mod 4) * 4 + (i \ 4) + 1, 1))
         Next
-    End If
- 
-    oFile1.Close
-    Set oFile1 = Nothing
-    oFile2.Close
-    Set oFile2 = Nothing
-    
-    AES = Len(sCipher)
+
+        If (j + 1) * 16 >= Len(sPlain) Then
+            isDone = True
+        End If
+
+        j = j + 1
+
+        If isEncode Then
+            r = 0
+            For i = 0 To 15
+                block(i) = block(i) Xor expandedKey((i Mod 4) * 4 + (i \ 4))
+            Next
+
+            For x = 1 To 13
+                block(0) = sbox(block(0))
+                block(1) = sbox(block(1))
+                block(2) = sbox(block(2))
+                block(3) = sbox(block(3))
+
+                intTemp = sbox(block(4))
+                block(4) = sbox(block(5))
+                block(5) = sbox(block(6))
+                block(6) = sbox(block(7))
+                block(7) = intTemp
+
+                intTemp = sbox(block(8))
+                block(8) = sbox(block(10))
+                block(10) = intTemp
+                intTemp = sbox(block(9))
+                block(9) = sbox(block(11))
+                block(11) = intTemp
+
+                intTemp = sbox(block(12))
+                block(12) = sbox(block(15))
+                block(15) = sbox(block(14))
+                block(14) = sbox(block(13))
+                block(13) = intTemp
+
+                r = x * 16
+                For i = 0 To 3
+                    Temp(0) = block(i)
+                    Temp(1) = block(i + 4)
+                    Temp(2) = block(i + 8)
+                    Temp(3) = block(i + 12)
+
+                    block(i) = g2(Temp(0)) Xor Temp(3) Xor Temp(2) Xor g3(Temp(1)) Xor expandedKey(r + i * 4)
+                    block(i + 4) = g2(Temp(1)) Xor Temp(0) Xor Temp(3) Xor g3(Temp(2)) Xor expandedKey(r + i * 4 + 1)
+                    block(i + 8) = g2(Temp(2)) Xor Temp(1) Xor Temp(0) Xor g3(Temp(3)) Xor expandedKey(r + i * 4 + 2)
+                    block(i + 12) = g2(Temp(3)) Xor Temp(2) Xor Temp(1) Xor g3(Temp(0)) Xor expandedKey(r + i * 4 + 3)
+                Next
+            Next
+
+            block(0) = sbox(block(0)) Xor expandedKey(224)
+            block(1) = sbox(block(1)) Xor expandedKey(228)
+            block(2) = sbox(block(2)) Xor expandedKey(232)
+            block(3) = sbox(block(3)) Xor expandedKey(236)
+
+            intTemp = sbox(block(4)) Xor expandedKey(237)
+            block(4) = sbox(block(5)) Xor expandedKey(225)
+            block(5) = sbox(block(6)) Xor expandedKey(229)
+            block(6) = sbox(block(7)) Xor expandedKey(233)
+            block(7) = intTemp
+
+            intTemp = sbox(block(8)) Xor expandedKey(234)
+            block(8) = sbox(block(10)) Xor expandedKey(226)
+            block(10) = intTemp
+            intTemp = sbox(block(9)) Xor expandedKey(238)
+            block(9) = sbox(block(11)) Xor expandedKey(230)
+            block(11) = intTemp
+
+            intTemp = sbox(block(12)) Xor expandedKey(231)
+            block(12) = sbox(block(15)) Xor expandedKey(227)
+            block(15) = sbox(block(14)) Xor expandedKey(239)
+            block(14) = sbox(block(13)) Xor expandedKey(235)
+            block(13) = intTemp
+        Else
+            block(0) = sboxinv(block(0) Xor expandedKey(224))
+            block(1) = sboxinv(block(1) Xor expandedKey(228))
+            block(2) = sboxinv(block(2) Xor expandedKey(232))
+            block(3) = sboxinv(block(3) Xor expandedKey(236))
+
+            intTemp = sboxinv(block(4) Xor expandedKey(225))
+            block(4) = sboxinv(block(7) Xor expandedKey(237))
+            block(7) = sboxinv(block(6) Xor expandedKey(233))
+            block(6) = sboxinv(block(5) Xor expandedKey(229))
+            block(5) = intTemp
+
+            intTemp = sboxinv(block(8) Xor expandedKey(226))
+            block(8) = sboxinv(block(10) Xor expandedKey(234))
+            block(10) = intTemp
+            intTemp = sboxinv(block(9) Xor expandedKey(230))
+            block(9) = sboxinv(block(11) Xor expandedKey(238))
+            block(11) = intTemp
+
+            intTemp = sboxinv(block(12) Xor expandedKey(227))
+            block(12) = sboxinv(block(13) Xor expandedKey(231))
+            block(13) = sboxinv(block(14) Xor expandedKey(235))
+            block(14) = sboxinv(block(15) Xor expandedKey(239))
+            block(15) = intTemp
+
+            For x = 13 To 1 Step -1
+                r = x * 16
+
+                For i = 0 To 3
+                    Temp(0) = block(i) Xor expandedKey(r + i * 4)
+                    Temp(1) = block(i + 4) Xor expandedKey(r + i * 4 + 1)
+                    Temp(2) = block(i + 8) Xor expandedKey(r + i * 4 + 2)
+                    Temp(3) = block(i + 12) Xor expandedKey(r + i * 4 + 3)
+
+                    block(i) = g14(Temp(0)) Xor g9(Temp(3)) Xor g13(Temp(2)) Xor g11(Temp(1))
+                    block(i + 4) = g14(Temp(1)) Xor g9(Temp(0)) Xor g13(Temp(3)) Xor g11(Temp(2))
+                    block(i + 8) = g14(Temp(2)) Xor g9(Temp(1)) Xor g13(Temp(0)) Xor g11(Temp(3))
+                    block(i + 12) = g14(Temp(3)) Xor g9(Temp(2)) Xor g13(Temp(1)) Xor g11(Temp(0))
+                Next
+
+                block(0) = sboxinv(block(0))
+                block(1) = sboxinv(block(1))
+                block(2) = sboxinv(block(2))
+                block(3) = sboxinv(block(3))
+
+                intTemp = sboxinv(block(4))
+                block(4) = sboxinv(block(7))
+                block(7) = sboxinv(block(6))
+                block(6) = sboxinv(block(5))
+                block(5) = intTemp
+
+                intTemp = sboxinv(block(8))
+                block(8) = sboxinv(block(10))
+                block(10) = intTemp
+                intTemp = sboxinv(block(9))
+                block(9) = sboxinv(block(11))
+                block(11) = intTemp
+
+                intTemp = sboxinv(block(12))
+                block(12) = sboxinv(block(13))
+                block(13) = sboxinv(block(14))
+                block(14) = sboxinv(block(15))
+                block(15) = intTemp
+            Next
+
+            r = 0
+            For i = 0 To 15
+                block(i) = block(i) Xor expandedKey((i Mod 4) * 4 + (i \ 4))
+            Next
+        End If
+
+        For i = 0 To 15
+            sCipher = sCipher & Chr(block((i Mod 4) * 4 + (i \ 4)))
+        Next
+    Loop
+    result = result + sCipher
+
+    aes_ecm = result
 End Function
  
 Function keyScheduleCore(ByVal row, ByVal a, ByRef box, ByRef rcon)
@@ -440,9 +424,9 @@ Function keyScheduleCore(ByVal row, ByVal a, ByRef box, ByRef rcon)
 End Function
  
 Function expandKey(ByRef key, ByRef box, ByRef rcon)
-    Dim rConIter, temp, i, result(240)
+    Dim rConIter, Temp, i, result(240)
  
-    ReDim temp(4)
+    ReDim Temp(4)
     rConIter = 1
  
     For i = 0 To 31
@@ -450,71 +434,30 @@ Function expandKey(ByRef key, ByRef box, ByRef rcon)
     Next
  
     For i = 32 To 239 Step 4
-        temp(0) = result(i - 4)
-        temp(1) = result(i - 3)
-        temp(2) = result(i - 2)
-        temp(3) = result(i - 1)
+        Temp(0) = result(i - 4)
+        Temp(1) = result(i - 3)
+        Temp(2) = result(i - 2)
+        Temp(3) = result(i - 1)
  
         If i Mod 32 = 0 Then
-            temp = keyScheduleCore(temp, rConIter, box, rcon)
+            Temp = keyScheduleCore(Temp, rConIter, box, rcon)
             rConIter = rConIter + 1
         End If
  
         If i Mod 32 = 16 Then
-            temp(0) = box(temp(0))
-            temp(1) = box(temp(1))
-            temp(2) = box(temp(2))
-            temp(3) = box(temp(3))
+            Temp(0) = box(Temp(0))
+            Temp(1) = box(Temp(1))
+            Temp(2) = box(Temp(2))
+            Temp(3) = box(Temp(3))
         End If
  
-        result(i) = result(i - 32) Xor temp(0)
-        result(i + 1) = result(i - 31) Xor temp(1)
-        result(i + 2) = result(i - 30) Xor temp(2)
-        result(i + 3) = result(i - 29) Xor temp(3)
+        result(i) = result(i - 32) Xor Temp(0)
+        result(i + 1) = result(i - 31) Xor Temp(1)
+        result(i + 2) = result(i - 30) Xor Temp(2)
+        result(i + 3) = result(i - 29) Xor Temp(3)
     Next
  
     expandKey = result
 End Function
 
-Function Crypto_run(Encrypt_Mode, keypass, sfile, tfile)
-    Dim fpath As String
-    Dim msg As String
-    Dim ret As Variant
-    If keypass = "" Then
-        msg = "Please enter the keypass value"
-        MsgBox msg, vbExclamation, "AES File Encryption"
-        Crypto_run = msg
-        Exit Function
-    End If
-    fpath = Replace(Environ("appdata"), "AppData\Roaming", "Desktop\")
-    If sfile = "" Then
-        msg = "Please enter the input filename"
-        MsgBox msg, vbExclamation, "AES File Encryption"
-        Crypto_run = msg
-        Exit Function
-    End If
-    If tfile = "" Then
-        msg = "Please enter the output filename"
-        MsgBox msg, vbExclamation, "AES File Encryption"
-        Crypto_run = msg
-        Exit Function
-    End If
-    If Dir(fpath + sfile) = "" Then
-        msg = "File not found, please check !"
-        MsgBox msg, vbExclamation, "AES File Encryption"
-        Crypto_run = msg
-        Exit Function
-    End If
-    If Dir(fpath + tfile) <> "" Then
-        Kill fpath + tfile
-    End If
-    If Encrypt_Mode Then
-        ret = AES_Encrypt(keypass, fpath + sfile, fpath + tfile)
-    Else
-        ret = AES_Decrypt(keypass, fpath + sfile, fpath + tfile)
-    End If
-    msg = "File created as " + tfile
-    MsgBox msg, vbInformation, "AES File Encryption"
-    Crypto_run = msg
-End Function
 
