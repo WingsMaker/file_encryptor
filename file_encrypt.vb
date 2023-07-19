@@ -1,39 +1,4 @@
-'File encryption using AES-ECB algo
-
 Option Explicit
-
-Private Sub cmdClear_Click()
-    Sheet1.Cells(5, 4) = ""
-    Sheet1.Cells(7, 4) = ""
-    Sheet1.Cells(9, 4) = ""
-    Sheet1.Cells(11, 2) = ""
-End Sub
-
-Private Sub cmdDecrypt_Click()
-    Dim sfile As String
-    Dim tfile As String
-    Dim fpath As String
-    Dim keypass As String
-    Dim msg As String
-    keypass = Sheet1.Cells(5, 4).Text
-    sfile = Sheet1.Cells(7, 4).Text
-    tfile = Sheet1.Cells(9, 4).Text
-    msg = Crypto_run(False, keypass, sfile, tfile)
-    Sheet1.Cells(11, 2) = msg
-End Sub
-
-Private Sub cmdEncrypt_Click()
-    Dim sfile As String
-    Dim tfile As String
-    Dim fpath As String
-    Dim keypass As String
-    Dim msg As String
-    keypass = Sheet1.Cells(5, 4).Text
-    sfile = Sheet1.Cells(7, 4).Text
-    tfile = Sheet1.Cells(9, 4).Text
-    msg = Crypto_run(True, keypass, sfile, tfile)
-    Sheet1.Cells(11, 2) = msg
-End Sub
 
 Function AES_Encrypt(keypass, sfile, tfile)
     AES_Encrypt = AES(keypass, True, sfile, tfile)
@@ -240,6 +205,7 @@ Function AES(keypass, encode_mode, sfile, tfile)
  
     expandedKey = expandKey(aesKey, sbox, rcon)
     Do Until oFile1.AtEndOfStream
+        DoEvents
         sPlain = oFile1.Read(1024)
         If encode_mode Then
             flen = flen + Len(sPlain)
@@ -253,7 +219,8 @@ Function AES(keypass, encode_mode, sfile, tfile)
                     y = Mid(blk, i, 1)
                     z = Asc(y)
                     y = i - 1
-                    flen = flen + z * (256^ ^ y)
+                    flen = flen + (z * (256 ^ y))
+                    DoEvents
                 Next
             End If
         End If
@@ -262,11 +229,13 @@ Function AES(keypass, encode_mode, sfile, tfile)
         isDone = False
  
         Do Until isDone
+            DoEvents
             sTemp = Mid(sPlain, j * 16 + 1, 16)
  
             If Len(sTemp) < 16 Then
                 For i = Len(sTemp) To 15
                     sTemp = sTemp & Chr(0)
+                    DoEvents
                 Next
             End If
  
@@ -284,9 +253,11 @@ Function AES(keypass, encode_mode, sfile, tfile)
                 r = 0
                 For i = 0 To 15
                     block(i) = block(i) Xor expandedKey((i Mod 4) * 4 + (i \ 4))
+                    DoEvents
                 Next
  
                 For x = 1 To 13
+                    DoEvents
                     block(0) = sbox(block(0))
                     block(1) = sbox(block(1))
                     block(2) = sbox(block(2))
@@ -313,6 +284,7 @@ Function AES(keypass, encode_mode, sfile, tfile)
  
                     r = x * 16
                     For i = 0 To 3
+                        DoEvents
                         temp(0) = block(i)
                         temp(1) = block(i + 4)
                         temp(2) = block(i + 8)
@@ -377,6 +349,7 @@ Function AES(keypass, encode_mode, sfile, tfile)
                     r = x * 16
  
                     For i = 0 To 3
+                        DoEvents
                         temp(0) = block(i) Xor expandedKey(r + i * 4)
                         temp(1) = block(i + 4) Xor expandedKey(r + i * 4 + 1)
                         temp(2) = block(i + 8) Xor expandedKey(r + i * 4 + 2)
@@ -416,11 +389,14 @@ Function AES(keypass, encode_mode, sfile, tfile)
                 r = 0
                 For i = 0 To 15
                     block(i) = block(i) Xor expandedKey((i Mod 4) * 4 + (i \ 4))
+                    DoEvents
                 Next
+                DoEvents
             End If
  
             For i = 0 To 15
                 sCipher = sCipher & Chr(block((i Mod 4) * 4 + (i \ 4)))
+                DoEvents
             Next
         Loop
         If oFile1.AtEndOfStream Then
@@ -428,6 +404,7 @@ Function AES(keypass, encode_mode, sfile, tfile)
             sCipher = Mid(sCipher, 1, y)
         End If
         oFile2.Write sCipher
+        DoEvents
     Loop
     If encode_mode Then
         For i = 1 To 5
@@ -439,6 +416,7 @@ Function AES(keypass, encode_mode, sfile, tfile)
                 flen = 0
             End If
             oFile2.Write Chr(x)
+            DoEvents
         Next
     End If
  
