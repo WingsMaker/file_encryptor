@@ -1,7 +1,7 @@
 # file_encryptor
 
-[File Encyption using Excel](https://github.com/WingsMaker/file_encryptor/blob/main/encryption.xlsm)
+[File Encyption using Excel](https://github.com/WingsMaker/file_encryptor/blob/main/encryptor.xlsm)
 
-Encrypt/Decrypt a file offline using AES-ECB algorithm via Excel Macro file "encryption.xlsm"
+Encrypt/Decrypt a file offline using AES-ECB algorithm via Excel Macro file "encryptor.xlsm"
 
-![image](https://user-images.githubusercontent.com/32192638/166081295-4f28207c-8b73-429f-9720-c97e51559b44.png)
+<img width="317" alt="image" src="https://github.com/WingsMaker/excel_aes/assets/32192638/39f87505-786a-4856-ba00-d4e84c458fd7">
